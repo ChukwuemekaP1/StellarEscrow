@@ -19,6 +19,7 @@ mod database;
 mod error;
 mod event_monitor;
 mod handlers;
+mod help;
 mod models;
 mod websocket;
 
@@ -30,6 +31,9 @@ use database::Database;
 use event_monitor::EventMonitor;
 use handlers::*;
 use websocket::WebSocketManager;
+use help::{
+    get_contact, get_docs, get_faqs, get_tutorial_by_id, get_tutorials, help_index, search_help,
+};
 
 #[derive(Parser)]
 #[command(name = "stellar-escrow-indexer")]
@@ -86,6 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/events/type/:event_type", get(get_events_by_type))
         .route("/events/replay", post(replay_events))
         .route("/ws", get(ws_handler))
+        // Help center
+        .route("/help", get(help_index))
+        .route("/help/faqs", get(get_faqs))
+        .route("/help/tutorials", get(get_tutorials))
+        .route("/help/tutorials/:id", get(get_tutorial_by_id))
+        .route("/help/docs", get(get_docs))
+        .route("/help/search", get(search_help))
+        .route("/help/contact", get(get_contact))
         .layer(CorsLayer::permissive())
         .with_state(AppState {
             database,
