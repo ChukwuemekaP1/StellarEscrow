@@ -45,6 +45,7 @@ pub enum TradeStatus {
     Completed,
     Disputed,
     Cancelled,
+    AwaitingBridge, // cross-chain: waiting for bridge oracle confirmation
 }
 
 #[contracttype]
@@ -69,6 +70,14 @@ pub struct TradeMetadata {
     pub entries: Vec<MetadataEntry>,
 }
 
+/// Option wrapper for TradeMetadata (Soroban contracttype requires enum for optional custom structs)
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OptionalMetadata {
+    None,
+    Some(TradeMetadata),
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Trade {
@@ -79,8 +88,7 @@ pub struct Trade {
     pub fee: u64,
     pub arbitrator: Option<Address>,
     pub status: TradeStatus,
-    /// Optional structured metadata (product info, shipping details, etc.)
-    pub metadata: Option<TradeMetadata>,
+    pub metadata: OptionalMetadata,
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +104,7 @@ pub struct TemplateTerms {
     pub description: String,
     pub default_arbitrator: Option<Address>,
     pub fixed_amount: Option<u64>,
-    pub default_metadata: Option<TradeMetadata>,
+    pub default_metadata: OptionalMetadata,
 }
 
 #[contracttype]
@@ -118,4 +126,41 @@ pub struct TradeTemplate {
     pub active: bool,
     pub created_at: u32,
     pub updated_at: u32,
+}
+
+// ---------------------------------------------------------------------------
+// Cross-Chain Bridge Support
+// ---------------------------------------------------------------------------
+
+/// Metadata for a cross-chain trade, stored alongside the base Trade.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrossChainInfo {
+    /// Identifier of the source chain (e.g. "ethereum", "polygon")
+    pub source_chain: String,
+    /// The deposit transaction hash on the source chain (as reported by the oracle)
+    pub source_tx_hash: String,
+    /// Ledger sequence after which the trade can be expired and funds reclaimed
+    pub expires_at_ledger: u32,
+}
+
+// ---------------------------------------------------------------------------
+// Trade Insurance
+// ---------------------------------------------------------------------------
+
+/// Maximum insurance premium in basis points (10% of trade amount)
+pub const MAX_INSURANCE_PREMIUM_BPS: u32 = 1000;
+
+/// Insurance policy attached to a trade.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InsurancePolicy {
+    /// Registered provider that underwrites this policy
+    pub provider: Address,
+    /// Premium paid by the buyer, in USDC stroops (already deducted from escrow)
+    pub premium: u64,
+    /// Maximum payout the provider will cover beyond the escrowed amount
+    pub coverage: u64,
+    /// Whether a claim has been paid out
+    pub claimed: bool,
 }
