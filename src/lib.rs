@@ -21,9 +21,9 @@ use types::{METADATA_MAX_ENTRIES, METADATA_MAX_VALUE_LEN};
 
 pub use errors::ContractError;
 pub use types::{
-    DisputeResolution, HistoryFilter, HistoryPage, MetadataEntry, SortOrder,
+    DashboardStats, DisputeResolution, HistoryFilter, HistoryPage, MetadataEntry, SortOrder,
     TierConfig, Trade, TradeMetadata, TradeStatus, TradeTemplate, TemplateTerms,
-    TemplateVersion, TransactionRecord, UserTier, UserTierInfo,
+    TemplateVersion, TransactionRecord, UserTier, UserTierInfo, VolumeInRange,
 };
 
 use storage::{
@@ -913,6 +913,26 @@ impl StellarEscrowContract {
         users::get_user_analytics(&env, &address)
     }
 
+    /// Update the avatar hash for a user (SHA-256 of the off-chain image).
+    /// Pass `None` to remove the avatar.
+    pub fn update_avatar(
+        env: Env,
+        address: Address,
+        avatar_hash: Option<soroban_sdk::Bytes>,
+    ) -> Result<(), ContractError> {
+        users::update_avatar(&env, address, avatar_hash)
+    }
+
+    /// Update security settings: 2FA flag and session timeout (seconds).
+    pub fn update_security_settings(
+        env: Env,
+        address: Address,
+        two_fa_enabled: bool,
+        session_timeout_secs: u32,
+    ) -> Result<(), ContractError> {
+        users::update_security_settings(&env, address, two_fa_enabled, session_timeout_secs)
+    }
+
     // -------------------------------------------------------------------------
     // Admin Panel (Issue #35)
     // -------------------------------------------------------------------------
@@ -954,6 +974,27 @@ impl StellarEscrowContract {
             return Err(ContractError::NotInitialized);
         }
         Ok(admin::get_analytics(&env))
+    }
+
+    /// Get full dashboard snapshot: platform stats, success rate, dispute rate, avg volume.
+    pub fn get_dashboard(env: Env) -> Result<DashboardStats, ContractError> {
+        if !is_initialized(&env) {
+            return Err(ContractError::NotInitialized);
+        }
+        Ok(admin::get_dashboard(&env))
+    }
+
+    /// Get trade volume and counts for an address within a ledger range (date-range charts).
+    pub fn get_volume_in_range(
+        env: Env,
+        address: Address,
+        from_ledger: u32,
+        to_ledger: u32,
+    ) -> Result<VolumeInRange, ContractError> {
+        if !is_initialized(&env) {
+            return Err(ContractError::NotInitialized);
+        }
+        admin::get_volume_in_range(&env, &address, from_ledger, to_ledger)
     }
 
     /// Get system configuration snapshot (fee, pause state, counters).
