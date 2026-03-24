@@ -3,11 +3,14 @@ use soroban_sdk::{Address, Env, Vec};
 use crate::errors::ContractError;
 use crate::types::{
     FilterPreset, PlatformAnalytics, TierConfig, TimelineEntry, Trade, TradeTemplate,
+    PlatformAnalytics, TierConfig, TimelineEntry, Trade, TradeTemplate,
+    OnboardingProgress, PlatformAnalytics, TierConfig, TimelineEntry, Trade, TradeTemplate,
     UserAnalytics, UserPreference, UserProfile, UserTierInfo,
 };
 
 // ---------------------------------------------------------------------------
 // Instance-storage keys
+// Instance-storage keys (contract-wide singletons)
 // ---------------------------------------------------------------------------
 const INITIALIZED: &str = "INIT";
 const ADMIN: &str = "ADMIN";
@@ -23,6 +26,9 @@ const PRESET_COUNTER: &str = "PST_CTR";
 
 // ---------------------------------------------------------------------------
 // Persistent-storage key prefixes
+
+// ---------------------------------------------------------------------------
+// Persistent-storage key prefixes (per-entity)
 // ---------------------------------------------------------------------------
 const TRADE_PREFIX: &str = "TRADE";
 const ARBITRATOR_PREFIX: &str = "ARB";
@@ -35,6 +41,7 @@ const USER_ANALYTICS_PREFIX: &str = "USTAT";
 const TIMELINE_PREFIX: &str = "TLINE";
 const PRESET_PREFIX: &str = "PST";
 const USER_PRESETS_PREFIX: &str = "UPST";
+const ONBOARDING_PREFIX: &str = "ONBOARD";
 
 // =============================================================================
 // Initialization
@@ -168,6 +175,7 @@ pub fn has_arbitrator(env: &Env, arbitrator: &Address) -> bool {
 // Address → trade index
 // =============================================================================
 
+/// Append a trade ID to the address's trade index (call for both seller and buyer).
 pub fn index_trade_for_address(env: &Env, address: &Address, trade_id: u64) {
     let key = (ADDR_TRADES_PREFIX, address);
     let mut ids: Vec<u64> = env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env));
@@ -175,6 +183,7 @@ pub fn index_trade_for_address(env: &Env, address: &Address, trade_id: u64) {
     env.storage().persistent().set(&key, &ids);
 }
 
+/// Return all trade IDs associated with an address.
 pub fn get_trade_ids_for_address(env: &Env, address: &Address) -> Vec<u64> {
     let key = (ADDR_TRADES_PREFIX, address);
     env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env))
@@ -228,6 +237,10 @@ pub fn save_template(env: &Env, template_id: u64, template: &TradeTemplate) {
 pub fn get_template(env: &Env, template_id: u64) -> Result<TradeTemplate, ContractError> {
     let key = (TEMPLATE_PREFIX, template_id);
     env.storage().persistent().get(&key).ok_or(ContractError::TemplateNotFound)
+    env.storage()
+        .persistent()
+        .get(&key)
+        .ok_or(ContractError::TemplateNotFound)
 }
 
 // =============================================================================
@@ -258,7 +271,11 @@ pub fn save_preference(env: &Env, address: &Address, pref: &UserPreference) {
     env.storage().persistent().set(&key, pref);
 }
 
-pub fn get_preference(env: &Env, address: &Address, pref_key: &soroban_sdk::String) -> Option<UserPreference> {
+pub fn get_preference(
+    env: &Env,
+    address: &Address,
+    pref_key: &soroban_sdk::String,
+) -> Option<UserPreference> {
     let key = (USER_PREF_PREFIX, address, pref_key);
     env.storage().persistent().get(&key)
 }
@@ -376,4 +393,23 @@ pub fn remove_preset_from_index(env: &Env, owner: &Address, preset_id: u64) {
 pub fn get_preset_ids_for_user(env: &Env, owner: &Address) -> Vec<u64> {
     let key = (USER_PRESETS_PREFIX, owner);
     env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(env))
+}
+
+// =============================================================================
+// Onboarding
+// =============================================================================
+
+pub fn save_onboarding(env: &Env, progress: &OnboardingProgress) {
+    let key = (ONBOARDING_PREFIX, &progress.address);
+    env.storage().persistent().set(&key, progress);
+}
+
+pub fn get_onboarding(env: &Env, address: &Address) -> Option<OnboardingProgress> {
+    let key = (ONBOARDING_PREFIX, address);
+    env.storage().persistent().get(&key)
+}
+
+pub fn has_onboarding(env: &Env, address: &Address) -> bool {
+    let key = (ONBOARDING_PREFIX, address);
+    env.storage().persistent().has(&key)
 }
