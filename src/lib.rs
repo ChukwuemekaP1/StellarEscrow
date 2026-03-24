@@ -6,6 +6,7 @@ mod events;
 mod history;
 mod storage;
 mod templates;
+mod theme;
 mod tiers;
 mod trade_detail;
 mod types;
@@ -20,6 +21,11 @@ use soroban_sdk::token::TokenClient;
 use types::{METADATA_MAX_ENTRIES, METADATA_MAX_VALUE_LEN};
 
 pub use errors::ContractError;
+pub use theme::{
+    FONT_LG, FONT_MD, FONT_SM,
+    PREF_FONT_SIZE, PREF_THEME_COLOR, PREF_THEME_MODE,
+    THEME_DARK, THEME_LIGHT, THEME_SYSTEM,
+};
 pub use types::{
     DashboardStats, DisputeResolution, HistoryFilter, HistoryPage, MetadataEntry, SortOrder,
     TierConfig, Trade, TradeMetadata, TradeStatus, TradeTemplate, TemplateTerms,
