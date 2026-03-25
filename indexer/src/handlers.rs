@@ -55,8 +55,16 @@ pub async fn api_index() -> Json<serde_json::Value> {
             "audit_query":     "GET  /audit?actor=&category=&action=&outcome=&severity=&from=&to=&limit=&offset=",
             "audit_stats":     "GET  /audit/stats",
             "audit_purge":     "DELETE /audit/purge  {older_than_days?}"
-            "fraud_alerts":    "GET  /fraud/alerts",
+            "search":          "GET  /search?q=&limit=",
+            "search_trades":   "GET  /search/trades?q=&status=&seller=&buyer=&min_amount=&max_amount=&limit=&offset=",
+            "search_discovery":"GET  /search/discovery?q=&role=&limit=",
+            "search_suggestions":"GET /search/suggestions?q=&limit=",
+            "search_history":  "GET  /search/history?limit=",
+            "search_analytics":"GET  /search/analytics?from=&to=&search_type=",
             "fraud_review":    "POST /fraud/review  {trade_id, status, reviewer, notes}",
+            "notif_prefs_get": "GET  /notifications/preferences/:address",
+            "notif_prefs_put": "PUT  /notifications/preferences/:address  {email_enabled, email_address, sms_enabled, phone_number, push_enabled, push_token, on_*}",
+            "notif_log":       "GET  /notifications/log/:address?limit=",
             "help":            "GET  /help"
         }
     }))
@@ -306,6 +314,14 @@ pub async fn search_history(
     Ok(Json(rows))
 }
 
+pub async fn search_analytics(
+    Query(params): Query<crate::models::SearchAnalyticsQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::models::SearchAnalyticsResponse>, AppError> {
+    let result = state.database.get_search_analytics(&params).await?;
+    Ok(Json(result))
+}
+
 pub async fn get_fraud_alerts(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<serde_json::Value>>, AppError> {
@@ -341,6 +357,7 @@ pub struct AppState {
     pub ws_manager: Arc<WebSocketManager>,
     pub health: HealthState,
     pub fraud_service: Arc<FraudDetectionService>,
+    pub notification_service: Arc<NotificationService>,
 }
 
 // =============================================================================
@@ -395,4 +412,38 @@ pub async fn purge_audit_logs(
     let days = body.older_than_days.unwrap_or(90).clamp(1, 365);
     let deleted = state.database.purge_old_audit_logs(days).await?;
     Ok(Json(RetentionResponse { deleted, older_than_days: days }))
+}
+
+// =============================================================================
+// Notification Handlers
+// =============================================================================
+
+/// GET /notifications/preferences/:address
+pub async fn get_notification_preferences(
+    Path(address): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::models::NotificationPreferences>, AppError> {
+    let prefs = state.database.get_notification_preferences(&address).await?
+        .ok_or_else(|| AppError::NotFound("preferences not found".into()))?;
+    Ok(Json(prefs))
+}
+
+/// PUT /notifications/preferences/:address
+pub async fn upsert_notification_preferences(
+    Path(address): Path<String>,
+    State(state): State<AppState>,
+    Json(body): Json<crate::models::UpdateNotificationPreferences>,
+) -> Result<Json<crate::models::NotificationPreferences>, AppError> {
+    let prefs = state.database.upsert_notification_preferences(&address, &body).await?;
+    Ok(Json(prefs))
+}
+
+/// GET /notifications/log/:address
+pub async fn get_notification_log(
+    Path(address): Path<String>,
+    Query(params): Query<crate::models::HistoryQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<crate::models::NotificationLogEntry>>, AppError> {
+    let entries = state.database.get_notification_log(&address, params.limit.unwrap_or(50)).await?;
+    Ok(Json(entries))
 }

@@ -32,6 +32,7 @@ mod rate_limit_handlers;
 mod storage;
 mod websocket;
 mod fraud_service;
+mod notification_service;
 
 #[cfg(test)]
 mod test;
@@ -52,6 +53,7 @@ use help::{
     get_contact, get_docs, get_faqs, get_tutorial_by_id, get_tutorials, help_index, search_help,
 };
 use fraud_service::FraudDetectionService;
+use notification_service::NotificationService;
 
 #[derive(Parser)]
 #[command(name = "stellar-escrow-indexer")]
@@ -111,12 +113,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Fraud Detection Service
     let fraud_service = Arc::new(FraudDetectionService::new(database.clone()).await);
 
+    // Initialize Notification Service
+    let notification_service = Arc::new(NotificationService::new(
+        database.clone(),
+        config.notification.clone(),
+    ));
+
     // Initialize event monitor
     let event_monitor = EventMonitor::new(
         config.stellar.clone(),
         database.clone(),
         ws_manager.clone(),
         fraud_service.clone(),
+        notification_service.clone(),
     );
 
     // Start event monitoring in background
@@ -181,8 +190,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/search/discovery", get(discover_entities))
         .route("/search/suggestions", get(search_suggestions))
         .route("/search/history", get(search_history))
+        .route("/search/analytics", get(search_analytics))
         .route("/fraud/alerts", get(get_fraud_alerts))
         .route("/fraud/review", post(update_fraud_review))
+        // Notifications
+        .route("/notifications/preferences/:address", get(get_notification_preferences).put(upsert_notification_preferences))
+        .route("/notifications/log/:address", get(get_notification_log))
         .route("/ws", get(ws_handler))
         .route("/help", get(help_index))
         .route("/help/faqs", get(get_faqs))
@@ -202,6 +215,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             database,
             ws_manager,
             health: health_state,
+            fraud_service,
+            notification_service,
         })
         .layer(middleware::from_fn_with_state(auth_config, auth_middleware))
         .layer(middleware::from_fn_with_state(rate_limiter, rate_limit_middleware))
